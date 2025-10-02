@@ -1,6 +1,6 @@
 [project]
 name = "rss-generator"
-version = "0.2.0"
+version = "0.3.0"
 description = "Modern CLI tool for generating RSS feeds from websites and uploading to MinIO"
 readme = "README.md"
 requires-python = ">=3.12"
