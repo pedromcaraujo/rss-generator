@@ -13,6 +13,7 @@ SITES = {
         'description': 'Latest posts from the Immich blog',
         'email': 'noreply@immich.app',
         'wait_time': 2000,
+        'max_articles': 10,  # Limit to most recent articles
     },
     'diariodominho': {
         'id': 'diariodominho',
@@ -24,6 +25,7 @@ SITES = {
         'description': 'Últimas notícias do Diário do Minho',
         'email': 'noreply@diariodominho.pt',
         'wait_time': 3000,
+        'max_articles': 10,  # Limit to most recent articles
     },
 }
 

@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='UTF-8'?>
+{% if xsl_url %}<?xml-stylesheet type="text/xsl" href="{{ xsl_url }}"?>{% endif %}
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>{{ channel.title }}</title>
+    <link>{{ channel.link }}</link>
+    <description>{{ channel.description }}</description>
+    <language>{{ channel.language }}</language>
+    <atom:link href="{{ channel.link }}" rel="self" type="application/rss+xml"/>
+    {% if channel.author %}
+    <managingEditor>{{ channel.author.email }} ({{ channel.author.name }})</managingEditor>
+    {% endif %}
+    <generator>RSS Generator</generator>
+    <lastBuildDate>{{ channel.last_build_date }}</lastBuildDate>
+
+    {% for item in items %}
+    <item>
+      <title>{{ item.title | escape }}</title>
+      <link>{{ item.link }}</link>
+      <guid isPermaLink="true">{{ item.link }}</guid>
+      <description>{{ item.description | escape }}</description>
+      {% if item.author %}
+      <author>{{ item.author.email }} ({{ item.author.name }})</author>
+      {% endif %}
+      {% if item.pub_date %}
+      <pubDate>{{ item.pub_date }}</pubDate>
+      {% endif %}
+      {% if item.category %}
+      <category>{{ item.category }}</category>
+      {% endif %}
+      {% if item.content %}
+      <content:encoded xmlns:content="http://purl.org/rss/1.0/modules/content/"><![CDATA[{{ item.content }}]]></content:encoded>
+      {% endif %}
+      {% if item.image %}
+      <enclosure url="{{ item.image }}" type="image/jpeg" length="0"/>
+      {% endif %}
+    </item>
+    {% endfor %}
+  </channel>
+</rss>

@@ -5,7 +5,67 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag, Comment
+from rich.console import Console
+import re
+
+console = Console()
+
+
+def clean_html_content(html: str) -> str:
+    """
+    Clean HTML content by removing unwanted elements and attributes.
+
+    Args:
+        html: Raw HTML content
+
+    Returns:
+        Cleaned HTML string
+    """
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Remove unwanted elements
+        unwanted_tags = ['nav', 'header', 'footer', 'aside', 'script', 'style', 'svg', 'button', 'form']
+        for tag_name in unwanted_tags:
+            for element in soup.find_all(tag_name):
+                element.decompose()
+
+        # Remove HTML comments
+        for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+            comment.extract()
+
+        # Remove elements with 'muted' class (typically navigation breadcrumbs)
+        for element in soup.find_all(class_='muted'):
+            element.decompose()
+
+        # Remove short ul/ol lists that are likely navigation
+        for ul in list(soup.find_all(['ul', 'ol'])):
+            text = ul.get_text(strip=True)
+            links = ul.find_all('a')
+            # If it's short and has links, probably navigation
+            if len(text) < 100 and len(links) > 0:
+                ul.decompose()
+
+        # Clean up attributes - keep only essential ones
+        allowed_attrs = {'href', 'src', 'alt', 'title', 'class'}
+        for tag in soup.find_all(True):
+            attrs_to_remove = [attr for attr in list(tag.attrs.keys()) if attr not in allowed_attrs]
+            for attr in attrs_to_remove:
+                del tag[attr]
+
+        # Get the cleaned HTML
+        cleaned = str(soup)
+
+        # Remove excessive whitespace
+        cleaned = re.sub(r'\n\s*\n', '\n', cleaned)
+        cleaned = re.sub(r'  +', ' ', cleaned)
+
+        return cleaned
+    except Exception as e:
+        console.print(f"[red]Error in clean_html_content: {e}[/red]")
+        # Return original HTML if cleaning fails
+        return html
 
 
 def parse_immich(html_content: str, url: str) -> list[dict]:
@@ -41,11 +101,19 @@ def parse_immich(html_content: str, url: str) -> list[dict]:
         # Extract title
         title_elem = article.find(['h1', 'h2', 'h3', 'h4'])
         if title_elem:
-            post['title'] = title_elem.get_text(strip=True)
+            title_text = title_elem.get_text(strip=True)
         elif article.name == 'a':
-            post['title'] = article.get_text(strip=True)
+            title_text = article.get_text(strip=True)
         else:
             continue
+
+        # Clean title - remove date and author suffix patterns
+        # Patterns like "TitleDecember 30, 2023— Author"
+        title_text = re.sub(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}.*$', '', title_text)
+        title_text = re.sub(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}.*$', '', title_text)
+        # Remove author patterns like "— AuthorName"
+        title_text = re.sub(r'—\s*.*$', '', title_text)
+        post['title'] = title_text.strip()
 
         # Extract link
         link_elem = article.find('a', href=True) if article.name != 'a' else article
@@ -202,3 +270,173 @@ PARSERS = {
 def get_parser(parser_name: str):
     """Get parser function by name."""
     return PARSERS.get(parser_name)
+
+
+def extract_immich_content(html_content: str) -> Optional[str]:
+    """
+    Extract full article content from an Immich blog post page.
+
+    Args:
+        html_content: HTML content of the article page
+
+    Returns:
+        Article content as HTML string, or None if extraction fails
+    """
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Immich uses a specific structure: find h1, then go up to container
+        h1 = soup.find('h1')
+        if h1 and h1.parent and h1.parent.parent:
+            # The grandparent div contains all the article content
+            content_container = h1.parent.parent
+            # Extract as string first, then clean in a new soup
+            content_html = str(content_container)
+            if content_html:
+                return clean_html_content(content_html)
+
+        # Fallback: try to find article or main tags
+        article = soup.find('article')
+        if not article:
+            article = soup.find('main')
+
+        if article:
+            article_html = str(article)
+            if article_html:
+                return clean_html_content(article_html)
+
+        return None
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not extract Immich content: {e}[/yellow]")
+        return None
+
+
+def extract_immich_metadata(html_content: str) -> dict:
+    """
+    Extract metadata (author, image) from Immich blog post.
+
+    Args:
+        html_content: HTML content of the article page
+
+    Returns:
+        Dictionary with 'author' and 'image' keys
+    """
+    metadata = {'author': None, 'image': None}
+
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Extract author - look for text after "—"
+        for p in soup.find_all('p'):
+            text = p.get_text(strip=True)
+            if text.startswith('—'):
+                # Remove the "—" and clean
+                metadata['author'] = text.replace('—', '').strip()
+                break
+
+        # Extract featured image - look for first img tag in content
+        h1 = soup.find('h1')
+        if h1 and h1.parent and h1.parent.parent:
+            container = h1.parent.parent
+            img = container.find('img')
+            if img and img.get('src'):
+                src = img['src']
+                # Make absolute URL if needed
+                if src.startswith('/'):
+                    src = f"https://immich.app{src}"
+                metadata['image'] = src
+
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not extract Immich metadata: {e}[/yellow]")
+
+    return metadata
+
+
+def extract_diariodominho_content(html_content: str) -> Optional[str]:
+    """
+    Extract full article content from a Diário do Minho article page.
+
+    Args:
+        html_content: HTML content of the article page
+
+    Returns:
+        Article content as HTML string, or None if extraction fails
+    """
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Look for article content
+        article = soup.find('article')
+        if not article:
+            # Try finding by class patterns
+            article = soup.find(['div', 'section'], class_=lambda x: x and ('article' in x.lower() or 'content' in x.lower()))
+
+        if article:
+            article_html = str(article)
+            if article_html:
+                return clean_html_content(article_html)
+
+        return None
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not extract Diário do Minho content: {e}[/yellow]")
+        return None
+
+
+def extract_diariodominho_metadata(html_content: str) -> dict:
+    """
+    Extract metadata (author, image) from Diário do Minho article.
+
+    Args:
+        html_content: HTML content of the article page
+
+    Returns:
+        Dictionary with 'author' and 'image' keys
+    """
+    metadata = {'author': None, 'image': None}
+
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Extract author - look for byline or author meta
+        author_elem = soup.find(['span', 'div', 'p'], class_=lambda x: x and 'author' in x.lower())
+        if author_elem:
+            metadata['author'] = author_elem.get_text(strip=True)
+
+        # Extract featured image
+        article = soup.find('article')
+        if article:
+            img = article.find('img')
+            if img and img.get('src'):
+                src = img['src']
+                # Make absolute URL if needed
+                if src.startswith('/'):
+                    src = f"https://www.diariodominho.pt{src}"
+                metadata['image'] = src
+
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not extract Diário do Minho metadata: {e}[/yellow]")
+
+    return metadata
+
+
+# Content extractor registry
+CONTENT_EXTRACTORS = {
+    'parse_immich': extract_immich_content,
+    'parse_diariodominho': extract_diariodominho_content,
+}
+
+# Metadata extractor registry
+METADATA_EXTRACTORS = {
+    'parse_immich': extract_immich_metadata,
+    'parse_diariodominho': extract_diariodominho_metadata,
+}
+
+
+def get_content_extractor(parser_name: str):
+    """Get content extractor function by parser name."""
+    return CONTENT_EXTRACTORS.get(parser_name)
+
+
+def get_metadata_extractor(parser_name: str):
+    """Get metadata extractor function by parser name."""
+    return METADATA_EXTRACTORS.get(parser_name)
