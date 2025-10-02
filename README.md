@@ -101,6 +101,28 @@ MINIO_ENDPOINT=https://minio.example.com
 - **Beautiful CLI**: Rich terminal interface with progress indicators
 - **Optional XSL Styling**: Apply XSL stylesheets for browser-friendly RSS viewing
 
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=rss_generator --cov-report=html
+
+# Run tests on multiple Python versions
+tox
+```
+
+### Supported Python Versions
+
+- Python 3.12
+- Python 3.13
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development instructions.
+
 ## License
 
 MIT
