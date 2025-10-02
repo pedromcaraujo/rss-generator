@@ -237,7 +237,7 @@ class TestUploadToMinio:
         mock_s3 = MagicMock()
         mock_s3.upload_file.side_effect = ClientError(
             {"Error": {"Code": "NoSuchBucket", "Message": "Bucket not found"}},
-            "upload_file"
+            "upload_file",
         )
         mock_boto_client.return_value = mock_s3
 
