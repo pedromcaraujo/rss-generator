@@ -2,14 +2,15 @@
 
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+from email.utils import format_datetime
 from pathlib import Path
 from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
-from feedgen.feed import FeedGenerator
+from jinja2 import Environment, FileSystemLoader
 from playwright.sync_api import sync_playwright
 from rich.console import Console
 
@@ -20,6 +21,10 @@ console = Console()
 
 # Path to XSL stylesheet
 XSL_FILE = Path(__file__).parent / "feed.xsl"
+
+# Setup Jinja2 environment
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
 
 def fetch_page_with_playwright(url: str, wait_time: int = 2000) -> Optional[str]:
@@ -50,92 +55,126 @@ def fetch_page_with_playwright(url: str, wait_time: int = 2000) -> Optional[str]
 def generate_rss_feed(
     articles: list[dict],
     output_file: str,
-    site_config: dict
+    site_config: dict,
+    bucket_name: Optional[str] = None,
+    xsl_url: Optional[str] = None
 ) -> bool:
     """
-    Generate an RSS feed from articles.
+    Generate an RSS feed from articles using Jinja2 template.
 
     Args:
         articles: List of article dictionaries with title, link, description, date, etc.
         output_file: Path to save the RSS feed
         site_config: Site configuration dictionary
+        bucket_name: S3 bucket name for default XSL URL
+        xsl_url: Custom XSL stylesheet URL (overrides default)
 
     Returns:
         True if successful, False otherwise
     """
     try:
-        fg = FeedGenerator()
-        fg.id(site_config['url'])
-        fg.title(site_config['name'])
-        fg.author({'name': site_config['name'], 'email': site_config.get('email', 'noreply@example.com')})
-        fg.link(href=site_config['url'], rel='alternate')
-        fg.description(site_config.get('description', f"Latest posts from {site_config['name']}"))
-        fg.language(site_config.get('language', 'en'))
+        # Determine XSL URL
+        final_xsl_url = None
+        if xsl_url:
+            final_xsl_url = xsl_url
+        elif os.getenv('XSL_URL'):
+            final_xsl_url = os.getenv('XSL_URL')
+        elif bucket_name or os.getenv('S3_BUCKET'):
+            if bucket_name is None:
+                bucket_name = os.getenv('S3_BUCKET', 'rss-feeds')
+            s3_endpoint = os.getenv('S3_ENDPOINT') or os.getenv('MINIO_ENDPOINT')
+            s3_public_url = os.getenv('S3_PUBLIC_URL') or s3_endpoint
+            if s3_public_url:
+                public_base = s3_public_url.replace('https://', '').replace('http://', '')
+                final_xsl_url = f"https://{public_base}/{bucket_name}/feed.xsl"
 
+        # Prepare channel data
+        channel = {
+            'title': site_config['name'],
+            'link': site_config['url'],
+            'description': site_config.get('description', f"Latest posts from {site_config['name']}"),
+            'language': site_config.get('language', 'en'),
+            'author': {
+                'name': site_config['name'],
+                'email': site_config.get('email', 'noreply@example.com')
+            },
+            'last_build_date': format_datetime(datetime.now(timezone.utc))
+        }
+
+        # Prepare items data
+        items = []
         for article in articles:
-            fe = fg.add_entry()
-            fe.id(article['link'])
-            fe.title(article['title'])
-            fe.link(href=article['link'])
-            fe.description(article.get('description', article['title']))
+            item = {
+                'title': article['title'],
+                'link': article['link'],
+                'description': article.get('description', article['title']),
+            }
 
-            # Add category if available
+            # Add author if available
+            if article.get('author'):
+                item['author'] = {
+                    'name': article['author'],
+                    'email': 'noreply@example.com'
+                }
+
+            # Add full content if available
+            if article.get('content'):
+                item['content'] = article['content']
+
+            # Add featured image
+            if article.get('image'):
+                item['image'] = article['image']
+
+            # Add category
             if article.get('category'):
-                fe.category(term=article['category'])
+                item['category'] = article['category']
 
-            # Handle date parsing
+            # Parse and format date
             if article.get('date'):
                 try:
                     if isinstance(article['date'], str):
-                        # Try to parse common date formats
-                        for fmt in ['%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%B %d, %Y', '%b %d, %Y']:
+                        date_str = article['date'].strip()
+                        date_formats = [
+                            '%Y-%m-%d',
+                            '%Y-%m-%dT%H:%M:%S',
+                            '%B %d, %Y',
+                            '%b %d, %Y',
+                        ]
+                        for fmt in date_formats:
                             try:
-                                dt = datetime.strptime(article['date'], fmt)
-                                fe.published(dt)
+                                dt = datetime.strptime(date_str, fmt)
+                                dt = dt.replace(tzinfo=timezone.utc)
+                                item['pub_date'] = format_datetime(dt)
                                 break
-                            except ValueError:
+                            except (ValueError, AttributeError):
                                 continue
-                except Exception:
-                    pass
 
-        # Write RSS feed
-        fg.rss_file(output_file)
+                        if 'pub_date' not in item:
+                            console.print(f"[yellow]Could not parse date '{date_str}' for article '{article.get('title')}'[/yellow]")
+                except Exception as e:
+                    console.print(f"[yellow]Error parsing date: {e}[/yellow]")
 
-        # Add XSL stylesheet reference to make it browser-friendly
-        _add_xsl_stylesheet(output_file)
+            items.append(item)
+
+        # Render RSS feed from template
+        template = jinja_env.get_template('rss_feed.xml')
+        rss_content = template.render(
+            xsl_url=final_xsl_url,
+            channel=channel,
+            items=items
+        )
+
+        # Write to file
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(rss_content)
 
         return True
     except Exception as e:
         console.print(f"[red]Error generating RSS feed: {e}[/red]", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return False
 
-
-def _add_xsl_stylesheet(xml_file: str):
-    """
-    Add XSL stylesheet reference to XML file for browser display.
-
-    Args:
-        xml_file: Path to XML file
-    """
-    try:
-        with open(xml_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Add XSL stylesheet processing instruction after XML declaration
-        xsl_pi = '<?xml-stylesheet type="text/xsl" href="feed.xsl"?>\n'
-
-        if '<?xml-stylesheet' not in content:
-            # Insert after XML declaration
-            content = content.replace(
-                '<?xml version=\'1.0\' encoding=\'UTF-8\'?>\n',
-                f'<?xml version=\'1.0\' encoding=\'UTF-8\'?>\n{xsl_pi}',
-                1
-            )
-
-            with open(xml_file, 'w', encoding='utf-8') as f:
-                f.write(content)
-    except Exception as e:
-        console.print(f"[yellow]Warning: Could not add XSL stylesheet: {e}[/yellow]")
 
 
 def upload_to_minio(
@@ -144,7 +183,7 @@ def upload_to_minio(
     object_name: Optional[str] = None
 ) -> bool:
     """
-    Upload a file to MinIO bucket.
+    Upload a file to S3-compatible bucket (MinIO, AWS S3, etc.).
 
     Args:
         file_path: Path to file to upload
@@ -154,31 +193,39 @@ def upload_to_minio(
     Returns:
         True if file was uploaded, else False
     """
-    # Get credentials from environment variables
-    access_key = os.getenv('MINIO_ACCESS_KEY')
-    secret_key = os.getenv('MINIO_SECRET_KEY')
-    endpoint = os.getenv('MINIO_ENDPOINT', 'https://minio.example.com')
+    # Get credentials from environment variables (support both S3 and MINIO prefixes)
+    access_key = os.getenv('S3_ACCESS_KEY', os.getenv('MINIO_ACCESS_KEY'))
+    secret_key = os.getenv('S3_SECRET_KEY', os.getenv('MINIO_SECRET_KEY'))
+    endpoint = os.getenv('S3_ENDPOINT', os.getenv('MINIO_ENDPOINT'))
 
     if not access_key or not secret_key:
-        console.print("[yellow]MinIO credentials not found in environment[/yellow]")
+        console.print("[yellow]S3 credentials not found in environment[/yellow]")
         return False
 
     # If S3 object_name was not specified, use file_path basename
     if object_name is None:
         object_name = os.path.basename(file_path)
 
-    # Ensure endpoint has protocol
-    if not endpoint.startswith('http'):
-        endpoint = f'https://{endpoint}'
+    # Get region (required for AWS S3, optional for MinIO)
+    region = os.getenv('S3_REGION') or os.getenv('AWS_DEFAULT_REGION') or 'us-east-1'
+
+    # Create S3 client config
+    s3_config = {
+        'aws_access_key_id': access_key,
+        'aws_secret_access_key': secret_key,
+        'region_name': region
+    }
+
+    # Only set endpoint_url if provided (for MinIO/S3-compatible services)
+    # AWS S3 doesn't need endpoint_url
+    if endpoint:
+        # Ensure endpoint has protocol
+        if not endpoint.startswith('http'):
+            endpoint = f'https://{endpoint}'
+        s3_config['endpoint_url'] = endpoint
 
     # Create S3 client
-    s3_client = boto3.client(
-        's3',
-        endpoint_url=endpoint,
-        aws_access_key_id=access_key,
-        aws_secret_access_key=secret_key,
-        region_name='us-east-1'
-    )
+    s3_client = boto3.client('s3', **s3_config)
 
     try:
         s3_client.upload_file(
@@ -189,10 +236,12 @@ def upload_to_minio(
         )
         return True
     except ClientError as e:
-        console.print(f"[red]Error uploading to MinIO: {e}[/red]", file=sys.stderr)
+        console.print(f"[red]Error uploading to S3: {e}[/red]", file=sys.stderr)
         return False
 
 
 def check_minio_credentials() -> bool:
-    """Check if MinIO credentials are configured."""
-    return bool(os.getenv('MINIO_ACCESS_KEY') and os.getenv('MINIO_SECRET_KEY'))
+    """Check if S3 credentials are configured."""
+    access_key = os.getenv('S3_ACCESS_KEY', os.getenv('MINIO_ACCESS_KEY'))
+    secret_key = os.getenv('S3_SECRET_KEY', os.getenv('MINIO_SECRET_KEY'))
+    return bool(access_key and secret_key)
