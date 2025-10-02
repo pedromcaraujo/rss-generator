@@ -106,9 +106,6 @@ MINIO_ENDPOINT=https://minio.example.com
 ### Running Tests
 
 ```bash
-# Install development dependencies
-pip install -e ".[dev]"
-
 # Run all tests
 pytest
 

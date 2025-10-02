@@ -118,12 +118,14 @@ The test suite achieves 82% coverage by mocking external I/O and focusing on log
 - **Python 3.12+ required**: Uses modern type hints like `list[dict]` instead of `List[Dict]`
 - **Playwright browsers**: Must run `playwright install chromium` after setup for headless browser functionality
 
-## Root Scripts
+## Standalone Generators
+
+Located in `rss_generator/standalone/`:
 
 - **`immich_blog.py`** - Standalone RSS generator for Immich Blog (https://immich.app/blog)
 - **`diariodominho.py`** - Standalone RSS generator for Diário do Minho (https://www.diariodominho.pt/)
 
-These are **independent implementations** that directly use Playwright + BeautifulSoup + feedgen. They do NOT use the `rss_generator` package. Keep these as they provide alternative implementations and can be run directly via `python immich_blog.py` or `python diariodominho.py`.
+These are **independent implementations** that directly use Playwright + BeautifulSoup + feedgen. They do NOT use the main `rss_generator` package parsers/CLI. Keep these as they provide alternative implementations and can be run directly via `python -m rss_generator.standalone.immich_blog` or `python -m rss_generator.standalone.diariodominho`.
 
 ## Environment Variables
 
