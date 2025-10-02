@@ -8,6 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+env/
 
 # Environment variables
 .env
@@ -17,3 +19,28 @@ wheels/
 
 # Upload markers
 .*_xsl_uploaded
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+*.cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
