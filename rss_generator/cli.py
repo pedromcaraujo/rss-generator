@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -10,6 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from .common import (
+    XSL_FILE,
     check_minio_credentials,
     fetch_page_with_playwright,
     generate_rss_feed,
@@ -88,13 +90,22 @@ def process_site(
     # Upload to MinIO if requested
     if upload and check_minio_credentials():
         console.print(f"[cyan]Uploading to MinIO...[/cyan]")
-        if upload_to_minio(output_file, bucket_name):
-            console.print(
-                f"[green]Uploaded to https://minio.example.com/{bucket_name}/{output_file}[/green]"
-            )
-        else:
-            console.print(f"[red]Failed to upload to MinIO[/red]")
+
+        # Upload the RSS feed
+        if not upload_to_minio(output_file, bucket_name):
+            console.print(f"[red]Failed to upload RSS feed to MinIO[/red]")
             return False
+
+        # Upload the XSL stylesheet (once per bucket)
+        xsl_uploaded_marker = f".{bucket_name}_xsl_uploaded"
+        if not os.path.exists(xsl_uploaded_marker):
+            if upload_to_minio(str(XSL_FILE), bucket_name, "feed.xsl"):
+                # Create marker file to avoid re-uploading XSL
+                Path(xsl_uploaded_marker).touch()
+
+        console.print(
+            f"[green]Uploaded to https://minio.example.com/{bucket_name}/{output_file}[/green]"
+        )
     elif upload:
         console.print("[yellow]MinIO credentials not configured, skipping upload[/yellow]")
 

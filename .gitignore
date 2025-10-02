@@ -14,3 +14,6 @@ wheels/
 
 # Generated RSS feeds
 *.xml
+
+# Upload markers
+.*_xsl_uploaded

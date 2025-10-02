@@ -3,6 +3,7 @@
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import boto3
@@ -16,6 +17,9 @@ from rich.console import Console
 load_dotenv()
 
 console = Console()
+
+# Path to XSL stylesheet
+XSL_FILE = Path(__file__).parent / "feed.xsl"
 
 
 def fetch_page_with_playwright(url: str, wait_time: int = 2000) -> Optional[str]:
@@ -96,10 +100,42 @@ def generate_rss_feed(
 
         # Write RSS feed
         fg.rss_file(output_file)
+
+        # Add XSL stylesheet reference to make it browser-friendly
+        _add_xsl_stylesheet(output_file)
+
         return True
     except Exception as e:
         console.print(f"[red]Error generating RSS feed: {e}[/red]", file=sys.stderr)
         return False
+
+
+def _add_xsl_stylesheet(xml_file: str):
+    """
+    Add XSL stylesheet reference to XML file for browser display.
+
+    Args:
+        xml_file: Path to XML file
+    """
+    try:
+        with open(xml_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Add XSL stylesheet processing instruction after XML declaration
+        xsl_pi = '<?xml-stylesheet type="text/xsl" href="feed.xsl"?>\n'
+
+        if '<?xml-stylesheet' not in content:
+            # Insert after XML declaration
+            content = content.replace(
+                '<?xml version=\'1.0\' encoding=\'UTF-8\'?>\n',
+                f'<?xml version=\'1.0\' encoding=\'UTF-8\'?>\n{xsl_pi}',
+                1
+            )
+
+            with open(xml_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not add XSL stylesheet: {e}[/yellow]")
 
 
 def upload_to_minio(

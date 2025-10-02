@@ -54,16 +54,47 @@ def parse_immich(html_content: str, url: str) -> list[dict]:
         else:
             continue
 
-        # Extract date
-        date_elem = article.find(
-            ['time', 'span', 'div'],
-            class_=lambda x: x and 'date' in x.lower()
-        )
-        if date_elem:
-            date_text = date_elem.get('datetime') or date_elem.get_text(strip=True)
-            post['date'] = date_text
-        else:
-            post['date'] = datetime.now().isoformat()
+        # Extract date - try multiple methods
+        post['date'] = None
+
+        # Try 1: Look for time element with datetime attribute
+        time_elem = article.find('time')
+        if time_elem and time_elem.get('datetime'):
+            post['date'] = time_elem['datetime']
+
+        # Try 2: Look for elements with date in class name
+        if not post['date']:
+            date_elem = article.find(
+                ['time', 'span', 'div'],
+                class_=lambda x: x and 'date' in x.lower()
+            )
+            if date_elem:
+                post['date'] = date_elem.get('datetime') or date_elem.get_text(strip=True)
+
+        # Try 3: Extract from URL pattern (e.g., /2023-12-30-title)
+        if not post['date'] and link_elem:
+            link_text = link_elem['href']
+            date_match = re.search(r'/(\d{4})-(\d{2})-(\d{2})', link_text)
+            if date_match:
+                post['date'] = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+        # Try 4: Look in article text for common date patterns
+        if not post['date']:
+            text = article.get_text()
+            # Match patterns like "December 30, 2023", "Dec 30, 2023"
+            date_patterns = [
+                r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}',
+                r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}'
+            ]
+            for pattern in date_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    post['date'] = match.group(0)
+                    break
+
+        # Fallback: use current date if nothing found
+        if not post['date']:
+            post['date'] = datetime.now().strftime('%Y-%m-%d')
 
         # Extract description/excerpt
         desc_elem = article.find(
