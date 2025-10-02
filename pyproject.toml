@@ -1,5 +1,5 @@
 [project]
-name = "blog-rss-generator"
+name = "rss-generator"
 version = "0.1.0"
 description = "Modern CLI tool for generating RSS feeds from websites and uploading to MinIO"
 readme = "README.md"
@@ -14,6 +14,23 @@ dependencies = [
     "rich>=14.1.0",
     "typer>=0.19.2",
 ]
+authors = [
+    {name = "Pedro Araujo", email = "pedromcaraujo@users.noreply.github.com"}
+]
+license = {text = "MIT"}
+keywords = ["rss", "feed", "generator", "minio", "s3", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/pedromcaraujo/rss-generator"
+Repository = "https://github.com/pedromcaraujo/rss-generator"
+Issues = "https://github.com/pedromcaraujo/rss-generator/issues"
 
 [project.scripts]
 rss-generator = "rss_generator.cli:main"

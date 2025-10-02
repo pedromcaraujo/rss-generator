@@ -16,20 +16,30 @@ A modern CLI tool for generating RSS feeds from websites and uploading them to M
 ### Using uvx (recommended)
 
 ```bash
-# Run directly without installation
-uvx --from git+https://github.com/pedromcaraujo/blog-rss-generator rss-generator --help
+# Install from PyPI and run
+uvx rss-generator --help
+
+# Or run directly from GitHub
+uvx --from git+https://github.com/pedromcaraujo/rss-generator rss-generator --help
 
 # Or clone and run locally
-git clone https://github.com/pedromcaraujo/blog-rss-generator.git
-cd blog-rss-generator
+git clone https://github.com/pedromcaraujo/rss-generator.git
+cd rss-generator
 uvx --from . rss-generator --help
 ```
 
-### Using uv
+### Using pip
 
 ```bash
-git clone https://github.com/pedromcaraujo/blog-rss-generator.git
-cd blog-rss-generator
+pip install rss-generator
+rss-generator --help
+```
+
+### Development
+
+```bash
+git clone https://github.com/pedromcaraujo/rss-generator.git
+cd rss-generator
 uv sync
 uv run rss-generator --help
 ```
@@ -144,13 +154,13 @@ After generation, feeds are available at:
 Add to crontab to run daily at 9 AM:
 
 ```bash
-0 9 * * * cd /path/to/blog-rss-generator && uvx --from . rss-generator generate --all
+0 9 * * * cd /path/to/rss-generator && uvx rss-generator generate --all
 ```
 
 ## Project Structure
 
 ```
-blog-rss-generator/
+rss-generator/
 ├── rss_generator/
 │   ├── __init__.py
 │   ├── __main__.py       # Entry point
