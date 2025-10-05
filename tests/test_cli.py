@@ -34,6 +34,26 @@ class TestListCommand:
         assert "Available Sites" in result.stdout or "ID" in result.stdout
 
 
+class TestSetupCommand:
+    """Tests for the setup command."""
+
+    @patch("subprocess.run")
+    def test_setup_command_succeeds(self, mock_run):
+        """Test that setup command runs successfully."""
+        mock_run.return_value = Mock(returncode=0, stderr="", stdout="")
+        result = runner.invoke(app, ["setup"])
+        assert result.exit_code == 0
+        assert "installed successfully" in result.stdout.lower()
+
+    @patch("subprocess.run")
+    def test_setup_command_fails(self, mock_run):
+        """Test that setup command handles failure."""
+        mock_run.return_value = Mock(returncode=1, stderr="Error", stdout="")
+        result = runner.invoke(app, ["setup"])
+        assert result.exit_code == 1
+        assert "failed" in result.stdout.lower() or "error" in result.stdout.lower()
+
+
 class TestCheckCommand:
     """Tests for the check command."""
 
@@ -55,15 +75,23 @@ class TestCheckCommand:
         result = runner.invoke(app, ["check"])
         assert "sites configured" in result.stdout.lower()
 
+    def test_check_command_shows_playwright_status(self):
+        """Test that check command shows Playwright browser status."""
+        result = runner.invoke(app, ["check"])
+        assert "playwright" in result.stdout.lower() or "browser" in result.stdout.lower()
+
 
 class TestGenerateCommand:
     """Tests for the generate command."""
 
     def test_generate_requires_site_or_all_flag(self):
-        """Test that generate command requires either site ID or --all flag."""
+        """Test that generate command shows help and available sites when run without arguments."""
         result = runner.invoke(app, ["generate"])
-        assert result.exit_code == 1
-        assert "Error" in result.stdout or "Provide a site ID" in result.stdout
+        assert result.exit_code == 0
+        # Should show help text
+        assert "Usage:" in result.stdout or "Generate RSS" in result.stdout
+        # Should show available sites
+        assert "Available Sites" in result.stdout or "immich" in result.stdout.lower()
 
     def test_generate_with_invalid_site(self):
         """Test that generate command fails with invalid site ID."""

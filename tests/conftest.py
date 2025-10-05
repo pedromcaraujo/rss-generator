@@ -48,6 +48,15 @@ def sample_diariodominho_html():
 
 
 @pytest.fixture
+def sample_newalbumreleases_metal_html():
+    """Load sample HTML from New Album Releases metal category for testing."""
+    import pathlib
+
+    fixture_path = pathlib.Path(__file__).parent / "fixtures" / "newalbumreleases_metal.html"
+    return fixture_path.read_text()
+
+
+@pytest.fixture
 def sample_article_content_html():
     """Sample article content for extraction testing."""
     return """

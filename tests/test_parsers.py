@@ -4,6 +4,7 @@ from rss_generator.parsers import (
     clean_html_content,
     parse_immich,
     parse_diariodominho,
+    parse_newalbumreleases_metal,
     extract_immich_content,
     extract_immich_metadata,
     extract_diariodominho_content,
@@ -142,6 +143,127 @@ class TestParseDiariodominho:
         """Test handling of empty HTML."""
         articles = parse_diariodominho("", "https://www.diariodominho.pt/")
         assert articles == []
+
+
+class TestParseNewAlbumReleasesMetal:
+    """Tests for parse_newalbumreleases_metal function."""
+
+    def test_parses_basic_structure(self, sample_newalbumreleases_metal_html):
+        """Test basic parsing of metal album releases."""
+        albums = parse_newalbumreleases_metal(
+            sample_newalbumreleases_metal_html,
+            "https://www.newalbumreleases.cc/category/metal/",
+        )
+        assert len(albums) == 3
+        assert albums[0]["title"] == "Counting Hours – Dreaming In The Mire (2025)"
+        assert albums[1]["title"] == "Warmen – Band Of Brothers (2025)"
+        assert albums[2]["title"] == "Harvest – For The Souls We Have Lost (2025)"
+
+    def test_extracts_links(self, sample_newalbumreleases_metal_html):
+        """Test link extraction."""
+        albums = parse_newalbumreleases_metal(
+            sample_newalbumreleases_metal_html,
+            "https://www.newalbumreleases.cc/category/metal/",
+        )
+        assert (
+            albums[0]["link"]
+            == "https://www.newalbumreleases.cc/226041/counting-hours-dreaming-in-the-mire-2025/"
+        )
+        assert (
+            albums[1]["link"]
+            == "https://www.newalbumreleases.cc/226032/warmen-band-of-brothers-2025-2/"
+        )
+
+    def test_extracts_dates(self, sample_newalbumreleases_metal_html):
+        """Test date extraction."""
+        albums = parse_newalbumreleases_metal(
+            sample_newalbumreleases_metal_html,
+            "https://www.newalbumreleases.cc/category/metal/",
+        )
+        assert albums[0]["date"] == "2025-09-29"
+        assert albums[1]["date"] == "2025-09-29"
+        assert albums[2]["date"] == "2025-09-27"
+
+    def test_extracts_album_details(self, sample_newalbumreleases_metal_html):
+        """Test extraction of album metadata."""
+        albums = parse_newalbumreleases_metal(
+            sample_newalbumreleases_metal_html,
+            "https://www.newalbumreleases.cc/category/metal/",
+        )
+        # Check first album
+        assert albums[0]["artist"] == "Counting Hours"
+        assert albums[0]["album_name"] == "Dreaming In The Mire"
+        assert albums[0]["released"] == "2025"
+        assert albums[0]["style"] == "Melodic Doom Metal"
+        assert albums[0]["format"] == "MP3 320Kbps"
+        assert albums[0]["size"] == "27 Mb"
+
+        # Check second album
+        assert albums[1]["artist"] == "Warmen"
+        assert albums[1]["style"] == "Death Metal"
+        assert albums[1]["size"] == "93 Mb"
+
+    def test_extracts_images(self, sample_newalbumreleases_metal_html):
+        """Test image extraction."""
+        albums = parse_newalbumreleases_metal(
+            sample_newalbumreleases_metal_html,
+            "https://www.newalbumreleases.cc/category/metal/",
+        )
+        assert (
+            albums[0]["image"]
+            == "https://www.newalbumreleases.cc/pic/87875749cc4929f6b239000272612a48.jpg"
+        )
+        assert (
+            albums[1]["image"]
+            == "https://www.newalbumreleases.cc/pic/68a02a980ebff.jpg"
+        )
+
+    def test_description_contains_all_info(self, sample_newalbumreleases_metal_html):
+        """Test that description contains all album info and image."""
+        albums = parse_newalbumreleases_metal(
+            sample_newalbumreleases_metal_html,
+            "https://www.newalbumreleases.cc/category/metal/",
+        )
+        desc = albums[0]["description"]
+        assert "<img src=" in desc
+        assert "Counting Hours" in desc
+        assert "Melodic Doom Metal" in desc
+        assert "MP3 320Kbps" in desc
+        assert "27 Mb" in desc
+
+    def test_deduplicates_links(self):
+        """Test that duplicate links are filtered out."""
+        html = """
+        <div class="single">
+            <h2><a href="https://example.com/album1">Album 1</a></h2>
+            <div class="date"><span class="clock"> On September - 29 - 2025</span></div>
+            <div class="entry"><img src="test.jpg"></div>
+        </div>
+        <div class="single">
+            <h2><a href="https://example.com/album1">Album 1 Duplicate</a></h2>
+            <div class="date"><span class="clock"> On September - 29 - 2025</span></div>
+            <div class="entry"><img src="test.jpg"></div>
+        </div>
+        """
+        albums = parse_newalbumreleases_metal(
+            html, "https://www.newalbumreleases.cc/category/metal/"
+        )
+        assert len(albums) == 1
+
+    def test_handles_empty_html(self):
+        """Test handling of empty HTML."""
+        albums = parse_newalbumreleases_metal(
+            "", "https://www.newalbumreleases.cc/category/metal/"
+        )
+        assert albums == []
+
+    def test_handles_no_albums(self):
+        """Test handling when no albums are found."""
+        html = "<html><body><p>No albums here</p></body></html>"
+        albums = parse_newalbumreleases_metal(
+            html, "https://www.newalbumreleases.cc/category/metal/"
+        )
+        assert albums == []
 
 
 class TestExtractImmichContent:

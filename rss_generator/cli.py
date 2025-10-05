@@ -12,6 +12,7 @@ from rich.table import Table
 from .common import (
     XSL_FILE,
     check_minio_credentials,
+    check_playwright_browsers,
     fetch_page_with_playwright,
     generate_rss_feed,
     upload_to_minio,
@@ -172,6 +173,7 @@ def process_site(
 
 @app.command()
 def generate(
+    ctx: typer.Context,
     site: Optional[str] = typer.Argument(
         None, help="Site ID to generate RSS feed for (or use --all for all sites)"
     ),
@@ -197,9 +199,25 @@ def generate(
     """Generate RSS feed(s) from configured websites."""
 
     if not all and not site:
-        console.print("[red]Error: Provide a site ID or use --all[/red]")
-        console.print("Run 'rss-generator list' to see available sites")
-        raise typer.Exit(1)
+        # Show help
+        console.print(ctx.get_help())
+        console.print("\n")
+
+        # Show available sites
+        sites = get_all_sites()
+        table = Table(
+            title="Available Sites", show_header=True, header_style="bold magenta"
+        )
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Name", style="green")
+        table.add_column("URL", style="blue")
+        table.add_column("Language", style="yellow")
+
+        for site_id, config in sites.items():
+            table.add_row(site_id, config["name"], config["url"], config["language"])
+
+        console.print(table)
+        raise typer.Exit(0)
 
     if all:
         # Process all sites
@@ -307,11 +325,56 @@ def upload_xsl(
 
 
 @app.command()
+def setup():
+    """Install Playwright browsers (required for web scraping)."""
+    console.print("[bold]Setting up RSS Generator...[/bold]\n")
+    console.print("[cyan]Installing Playwright browsers...[/cyan]")
+
+    import subprocess
+    import sys
+
+    try:
+        # Try to run playwright install chromium
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode == 0:
+            console.print("[green]✓[/green] Playwright browsers installed successfully!")
+            console.print("\n[bold]Setup complete![/bold] You can now use rss-generator.")
+            console.print("\nTry: [cyan]rss-generator list[/cyan] to see available sites")
+        else:
+            console.print("[red]✗[/red] Failed to install Playwright browsers")
+            console.print(f"\n{result.stderr}")
+            console.print("\n[yellow]Please try manually:[/yellow]")
+            console.print("  [cyan]uv run playwright install chromium[/cyan]")
+            console.print("  [cyan]python -m playwright install chromium[/cyan]")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"[red]Error during setup: {e}[/red]")
+        console.print("\n[yellow]Please try manually:[/yellow]")
+        console.print("  [cyan]uv run playwright install chromium[/cyan]")
+        console.print("  [cyan]python -m playwright install chromium[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def check():
     """Check configuration and environment."""
     console.print("[bold]RSS Generator Configuration Check[/bold]\n")
 
+    # Check Playwright browsers
+    if check_playwright_browsers():
+        console.print("[green]✓[/green] Playwright browsers installed")
+    else:
+        console.print("[red]✗[/red] Playwright browsers NOT installed")
+        console.print("  Run: [cyan]rss-generator setup[/cyan] to install")
+
     # Check S3 credentials
+    console.print()
     if check_minio_credentials():
         console.print("[green]✓[/green] S3 credentials configured")
         endpoint = (

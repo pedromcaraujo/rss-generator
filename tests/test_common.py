@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 from rss_generator.common import (
     generate_rss_feed,
     check_minio_credentials,
+    check_playwright_browsers,
     upload_to_minio,
 )
 
@@ -174,6 +175,43 @@ class TestCheckMinioCredentials:
         monkeypatch.delenv("MINIO_ACCESS_KEY", raising=False)
         monkeypatch.delenv("MINIO_SECRET_KEY", raising=False)
         assert check_minio_credentials() is False
+
+
+class TestCheckPlaywrightBrowsers:
+    """Tests for check_playwright_browsers function."""
+
+    @patch("rss_generator.common.sync_playwright")
+    def test_returns_true_when_browsers_installed(self, mock_playwright):
+        """Test that function returns True when browsers are installed."""
+        mock_context = MagicMock()
+        mock_browser = MagicMock()
+        mock_context.__enter__.return_value.chromium.launch.return_value = mock_browser
+        mock_playwright.return_value = mock_context
+
+        assert check_playwright_browsers() is True
+        mock_browser.close.assert_called_once()
+
+    @patch("rss_generator.common.sync_playwright")
+    def test_returns_false_when_executable_missing(self, mock_playwright):
+        """Test that function returns False when browser executable is missing."""
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value.chromium.launch.side_effect = Exception(
+            "Executable doesn't exist at /path/to/browser"
+        )
+        mock_playwright.return_value = mock_context
+
+        assert check_playwright_browsers() is False
+
+    @patch("rss_generator.common.sync_playwright")
+    def test_returns_true_for_other_errors(self, mock_playwright):
+        """Test that function returns True for non-browser-missing errors."""
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value.chromium.launch.side_effect = Exception(
+            "Some other error"
+        )
+        mock_playwright.return_value = mock_context
+
+        assert check_playwright_browsers() is True
 
 
 class TestUploadToMinio:

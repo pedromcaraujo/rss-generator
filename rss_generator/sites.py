@@ -25,6 +25,18 @@ SITES = {
         "wait_time": 3000,
         "max_articles": 10,  # Limit to most recent articles
     },
+    "newalbumreleases_metal": {
+        "id": "newalbumreleases_metal",
+        "name": "New Album Releases - Metal",
+        "url": "https://www.newalbumreleases.cc/category/metal/",
+        "output_file": "newalbumreleases_metal_feed.xml",
+        "parser": "parse_newalbumreleases_metal",
+        "language": "en",
+        "description": "Latest metal album releases from NewAlbumReleases.cc",
+        "email": "noreply@newalbumreleases.cc",
+        "wait_time": 2000,
+        "max_articles": 20,  # Limit to most recent albums
+    },
 }
 
 

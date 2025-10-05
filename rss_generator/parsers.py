@@ -284,10 +284,163 @@ def parse_diariodominho(html_content: str, url: str) -> list[dict]:
     return articles_list
 
 
+def parse_newalbumreleases_metal(html_content: str, url: str) -> list[dict]:
+    """
+    Parse New Album Releases metal category.
+
+    Args:
+        html_content: HTML content of the page
+        url: Base URL for resolving relative links
+
+    Returns:
+        List of article dictionaries
+    """
+    soup = BeautifulSoup(html_content, "html.parser")
+    albums = []
+    seen_links = set()
+
+    # Find all album entries
+    singles = soup.find_all("div", class_="single")
+
+    for single in singles:
+        album = {}
+
+        # Extract title and link
+        h2 = single.find("h2")
+        if not h2:
+            continue
+
+        link_elem = h2.find("a", href=True)
+        if not link_elem:
+            continue
+
+        album["title"] = link_elem.get_text(strip=True)
+        album["link"] = link_elem["href"]
+
+        # Skip duplicates
+        if album["link"] in seen_links:
+            continue
+        seen_links.add(album["link"])
+
+        # Extract date from the date div
+        date_div = single.find("div", class_="date")
+        if date_div:
+            clock_span = date_div.find("span", class_="clock")
+            if clock_span:
+                # Format: " On September - 29 - 2025"
+                date_text = clock_span.get_text(strip=True)
+                date_match = re.search(
+                    r"On\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+-\s+(\d{1,2})\s+-\s+(\d{4})",
+                    date_text,
+                )
+                if date_match:
+                    month_name = date_match.group(1)
+                    day = date_match.group(2).zfill(2)
+                    year = date_match.group(3)
+
+                    # Convert month name to number
+                    month_map = {
+                        "January": "01",
+                        "February": "02",
+                        "March": "03",
+                        "April": "04",
+                        "May": "05",
+                        "June": "06",
+                        "July": "07",
+                        "August": "08",
+                        "September": "09",
+                        "October": "10",
+                        "November": "11",
+                        "December": "12",
+                    }
+                    month = month_map.get(month_name, "01")
+                    album["date"] = f"{year}-{month}-{day}"
+                else:
+                    album["date"] = datetime.now().strftime("%Y-%m-%d")
+            else:
+                album["date"] = datetime.now().strftime("%Y-%m-%d")
+        else:
+            album["date"] = datetime.now().strftime("%Y-%m-%d")
+
+        # Extract album details from the entry div
+        entry_div = single.find("div", class_="entry")
+        if entry_div:
+            # Extract image
+            img = entry_div.find("img")
+            if img and img.get("src"):
+                album["image"] = img["src"]
+
+            # Extract all the details from the text
+            entry_text = entry_div.get_text()
+
+            # Extract Artist
+            artist_match = re.search(r"Artist:\s*([^\n]+)", entry_text)
+            if artist_match:
+                album["artist"] = artist_match.group(1).strip()
+
+            # Extract Album name
+            album_match = re.search(r"Album:\s*([^\n]+)", entry_text)
+            if album_match:
+                album["album_name"] = album_match.group(1).strip()
+
+            # Extract Released year
+            released_match = re.search(r"Released:\s*([^\n]+)", entry_text)
+            if released_match:
+                album["released"] = released_match.group(1).strip()
+
+            # Extract Style/Genre
+            style_match = re.search(r"Style:\s*([^\n]+)", entry_text)
+            if style_match:
+                album["style"] = style_match.group(1).strip()
+
+            # Extract Format
+            format_match = re.search(r"Format:\s*([^\n]+)", entry_text)
+            if format_match:
+                album["format"] = format_match.group(1).strip()
+
+            # Extract Size
+            size_match = re.search(r"Size:\s*([^\n]+)", entry_text)
+            if size_match:
+                album["size"] = size_match.group(1).strip()
+
+            # Build rich HTML description with all info
+            description_parts = []
+            if album.get("image"):
+                description_parts.append(
+                    f'<p><img src="{album["image"]}" alt="Album cover" /></p>'
+                )
+
+            description_parts.append("<p><strong>Album Details:</strong></p>")
+            description_parts.append("<ul>")
+            if album.get("artist"):
+                description_parts.append(f"<li><strong>Artist:</strong> {album['artist']}</li>")
+            if album.get("album_name"):
+                description_parts.append(f"<li><strong>Album:</strong> {album['album_name']}</li>")
+            if album.get("released"):
+                description_parts.append(f"<li><strong>Released:</strong> {album['released']}</li>")
+            if album.get("style"):
+                description_parts.append(f"<li><strong>Style:</strong> {album['style']}</li>")
+            if album.get("format"):
+                description_parts.append(f"<li><strong>Format:</strong> {album['format']}</li>")
+            if album.get("size"):
+                description_parts.append(f"<li><strong>Size:</strong> {album['size']}</li>")
+            description_parts.append("</ul>")
+
+            album["description"] = "".join(description_parts)
+        else:
+            album["description"] = album["title"]
+
+        if album.get("title") and album.get("link"):
+            albums.append(album)
+
+    return albums
+
+
 # Parser registry - maps parser names to functions
 PARSERS = {
     "parse_immich": parse_immich,
     "parse_diariodominho": parse_diariodominho,
+    "parse_newalbumreleases_metal": parse_newalbumreleases_metal,
 }
 
 

@@ -21,6 +21,27 @@ console = Console()
 # Path to XSL stylesheet
 XSL_FILE = Path(__file__).parent / "feed.xsl"
 
+
+def check_playwright_browsers() -> bool:
+    """
+    Check if Playwright browsers are installed.
+
+    Returns:
+        True if browsers are installed, False otherwise
+    """
+    try:
+        with sync_playwright() as p:
+            # Try to launch browser - if it fails, browsers aren't installed
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+            return True
+    except Exception as e:
+        error_msg = str(e)
+        if "Executable doesn't exist" in error_msg or "browsers" in error_msg.lower():
+            return False
+        # For other errors, assume browsers are installed but something else is wrong
+        return True
+
 # Setup Jinja2 environment
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
@@ -47,7 +68,20 @@ def fetch_page_with_playwright(url: str, wait_time: int = 2000) -> Optional[str]
             browser.close()
             return html_content
     except Exception as e:
-        console.print(f"[red]Error fetching {url}: {e}[/red]")
+        error_msg = str(e)
+
+        # Check if it's a missing browser error
+        if "Executable doesn't exist" in error_msg or "browsers" in error_msg.lower():
+            console.print("[red]Error: Playwright browsers are not installed![/red]\n")
+            console.print("[yellow]Please run ONE of the following commands to install browsers:[/yellow]")
+            console.print("  [cyan]rss-generator setup[/cyan]")
+            console.print("  [cyan]uv run playwright install chromium[/cyan]")
+            console.print("  [cyan]python -m playwright install chromium[/cyan]")
+            console.print("  [cyan]playwright install chromium[/cyan]")
+            console.print("\n[dim]This is a one-time setup required for web scraping.[/dim]")
+        else:
+            console.print(f"[red]Error fetching {url}: {e}[/red]")
+
         return None
 
 
